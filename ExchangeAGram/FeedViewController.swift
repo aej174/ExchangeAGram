@@ -9,24 +9,40 @@
 import UIKit
 import MobileCoreServices
 import CoreData
+import MapKit
 
 
-class FeedViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+class FeedViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate, CLLocationManagerDelegate {
 
     @IBOutlet weak var collectionView: UICollectionView!
     
     var feedArray:[AnyObject] = []
     
+    var locationManager: CLLocationManager!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Do any additional setup after loading the view.
+        // Do any additional setup after loading the view
         
+        locationManager = CLLocationManager()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        
+        locationManager.requestAlwaysAuthorization()
+        
+        locationManager.distanceFilter = 100.0
+        locationManager.startUpdatingLocation()
+        
+    }
+    
+    override func viewDidAppear(animated: Bool) {
         let request = NSFetchRequest(entityName: "FeedItem")
         let appDelegate:AppDelegate = (UIApplication.sharedApplication().delegate as AppDelegate)
         let context:NSManagedObjectContext = appDelegate.managedObjectContext!
         
         feedArray = context.executeFetchRequest(request, error: nil)!
+        collectionView.reloadData()
     }
 
     override func didReceiveMemoryWarning() {
@@ -35,17 +51,13 @@ class FeedViewController: UIViewController, UICollectionViewDataSource, UICollec
     }
     
 
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
-        // Get the new view controller using segue.destinationViewController.
-        // Pass the selected object to the new view controller.
-    }
-    */
     
     // IBActions
+    
+    @IBAction func profileTapped(sender: UIBarButtonItem) {
+        self.performSegueWithIdentifier("profileSegue", sender: nil)
+    }
+    
     
     @IBAction func snapBarButtonItemTapped(sender: UIBarButtonItem) {
         
@@ -69,7 +81,7 @@ class FeedViewController: UIViewController, UICollectionViewDataSource, UICollec
             
             let mediaTypes:[AnyObject] = [kUTTypeImage]
             photoLibraryController.mediaTypes = mediaTypes
-            //photoLibraryController.allowsEditing = false
+            photoLibraryController.allowsEditing = false
             
             self.presentViewController(photoLibraryController, animated: true, completion: nil)
         }
@@ -85,14 +97,20 @@ class FeedViewController: UIViewController, UICollectionViewDataSource, UICollec
     func imagePickerController(picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [NSObject : AnyObject]) {
         let image = info[UIImagePickerControllerOriginalImage] as UIImage
         let imageData = UIImageJPEGRepresentation(image, 1.0)
+        let thumbNailData = UIImageJPEGRepresentation(image, 0.1)
         
         let managedObjectContext = (UIApplication.sharedApplication().delegate as AppDelegate).managedObjectContext
-        let entityDescription = NSEntityDescription.entityForName("Feed Item", inManagedObjectContext:
+        let entityDescription = NSEntityDescription.entityForName("FeedItem", inManagedObjectContext:
             managedObjectContext!)
         let feedItem = FeedItem(entity: entityDescription!, insertIntoManagedObjectContext: managedObjectContext!)
         
         feedItem.image = imageData
         feedItem.caption = "test caption"
+        feedItem.thumbNail = thumbNailData
+        
+        feedItem.latitude = locationManager.location.coordinate.latitude
+        feedItem.longitude = locationManager.location.coordinate.longitude
+        
         
         (UIApplication.sharedApplication().delegate as AppDelegate).saveContext()
         
@@ -124,8 +142,25 @@ class FeedViewController: UIViewController, UICollectionViewDataSource, UICollec
         cell.imageView.image = UIImage(data: thisItem.image)
         cell.captionLabel.text = thisItem.caption
         
-        
         return cell
     }
+    
+    //UICollectionViewDelegate
+    
+    func collectionView(collectionView: UICollectionView, didSelectItemAtIndexPath indexPath: NSIndexPath) {
+        let thisItem = feedArray[indexPath.row] as FeedItem
+        
+        var filterVC = FilterViewController()
+        filterVC.thisFeedItem = thisItem
+        
+        self.navigationController?.pushViewController(filterVC, animated: false)
+    }
+    
+    //CLLocationManagerDelegate
+    
+    func locationManager(manager: CLLocationManager!, didUpdateLocations locations: [AnyObject]!) {
+        println("locations = \(locations)")
+    }
+    
 
 }
